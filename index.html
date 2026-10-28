@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typing Racer</title>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d0f1a; --panel:#161a2b; --line:#262c45; --text:#e8ebff; --muted:#8a91b4;
+    --good:#3ee08f; --bad:#ff4d6d; --accent:#ffcc29; --you:#ff3b3b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -20%,#26214a,var(--bg) 60%);color:var(--text);
+    font-family:'Russo One',system-ui,sans-serif;display:flex;justify-content:center;padding:20px 12px}
+  .wrap{width:100%;max-width:960px}
+  h1{margin:0 0 4px;font-size:clamp(28px,5vw,46px);letter-spacing:2px;text-align:center;
+    background:linear-gradient(90deg,#ffcc29,#ff3b3b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{text-align:center;color:var(--muted);margin-bottom:18px;font-size:14px}
+
+  /* stats bar */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+  .stat b{display:block;font-size:26px;color:var(--accent)}
+  .stat span{font-size:11px;color:var(--muted);letter-spacing:1px}
+
+  /* track */
+  .track{position:relative;background:#2a2d36;border-radius:14px;overflow:hidden;border:3px solid #444a5c;
+    padding:6px 0}
+  .lane{position:relative;height:58px;border-bottom:3px dashed #ffffff40}
+  .lane:last-child{border-bottom:none}
+  .track.moving .lane{background-image:repeating-linear-gradient(90deg,transparent 0 60px,#ffffff08 60px 120px);
+    animation:road .4s linear infinite}
+  @keyframes road{from{background-position:0 0}to{background-position:-120px 0}}
+  .finish{position:absolute;top:0;bottom:0;right:0;width:26px;z-index:1;
+    background:conic-gradient(#fff 25%,#111 0 50%,#fff 0 75%,#111 0) 0 0/13px 13px}
+  .car{position:absolute;top:50%;left:0;transform:translateY(-50%);width:84px;height:42px;z-index:2;
+    transition:left .15s linear}
+  .car .name{position:absolute;left:4px;top:-13px;font-size:10px;color:#fff;white-space:nowrap;text-shadow:0 1px 2px #000}
+  .car.you .name{color:var(--accent)}
+  .car .flame{position:absolute;left:-26px;top:16px;width:28px;height:12px;border-radius:50%;
+    background:radial-gradient(circle at 80% 50%,#fff,#ffcc29 30%,#ff5a1f 60%,transparent 70%);opacity:0;transition:opacity .2s}
+  .car.nitro .flame{opacity:1;animation:flick .08s infinite alternate}
+  @keyframes flick{to{transform:scaleX(1.4)}}
+  .car.shake{animation:shake .25s}
+  @keyframes shake{25%{transform:translateY(-50%) rotate(-6deg)}75%{transform:translateY(-50%) rotate(6deg)}}
+  .place{position:absolute;right:34px;top:50%;transform:translateY(-50%);font-size:20px;z-index:3}
+
+  /* text box */
+  .textbox{margin-top:14px;background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:18px 20px;
+    font-family:'JetBrains Mono',monospace;font-size:clamp(17px,2.4vw,22px);line-height:1.7;cursor:text;min-height:120px;
+    position:relative;transition:border-color .2s}
+  .textbox.focus{border-color:#4f5a96}
+  .textbox.err{border-color:var(--bad)}
+  .ch{color:#5d6488}
+  .ch.done{color:var(--good)}
+  .ch.cur{color:#fff;background:#ffcc2940;border-bottom:3px solid var(--accent);border-radius:2px}
+  .ch.cur.wrong{background:#ff4d6d60;border-bottom-color:var(--bad)}
+  .hint{color:var(--muted);font-size:13px;text-align:center;margin-top:8px;font-family:system-ui}
+  #hidden{position:absolute;opacity:0;left:0;top:0;width:1px;height:1px;border:0;padding:0}
+  .streak{position:absolute;right:14px;top:-12px;background:var(--accent);color:#111;font-size:12px;padding:3px 10px;
+    border-radius:20px;font-family:'Russo One';opacity:0;transition:opacity .2s}
+  .streak.show{opacity:1}
+
+  /* overlays */
+  .overlay{position:fixed;inset:0;background:#05060dcc;display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
+  .overlay.hidden{display:none}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:28px;max-width:440px;width:100%;text-align:center}
+  .card h2{margin:0 0 6px;font-size:30px}
+  .card p{color:var(--muted);font-family:system-ui;margin:6px 0 18px}
+  .diffs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+  .diff{background:#1f2440;border:2px solid var(--line);color:var(--text);border-radius:12px;padding:12px 8px;cursor:pointer;
+    font-family:'Russo One';font-size:16px}
+  .diff small{display:block;color:var(--muted);font-size:11px;margin-top:3px;font-family:system-ui}
+  .diff.sel{border-color:var(--accent);background:#2c2a1d}
+  .btn{background:linear-gradient(90deg,#ffcc29,#ff8a1f);color:#111;border:0;border-radius:12px;padding:14px 30px;
+    font-family:'Russo One';font-size:20px;cursor:pointer;letter-spacing:1px}
+  .btn:active{transform:scale(.97)}
+  .best{margin-top:14px;color:var(--muted);font-size:13px;font-family:system-ui}
+  .best b{color:var(--accent)}
+  .lights{display:flex;gap:14px;justify-content:center;background:#111;padding:16px 22px;border-radius:40px;border:3px solid #333}
+  .light{width:54px;height:54px;border-radius:50%;background:#2b0d0d}
+  .light.on{background:#ff2b2b;box-shadow:0 0 25px #ff2b2b}
+  .lights.go .light{background:#2bff6a;box-shadow:0 0 25px #2bff6a}
+  .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0 20px}
+  .results div{background:#1f2440;border-radius:10px;padding:10px 4px}
+  .results b{display:block;font-size:22px;color:var(--accent)}
+  .results span{font-size:11px;color:var(--muted)}
+  .bigplace{font-size:64px;line-height:1}
+  .newbest{color:var(--good);font-size:14px;margin-top:-4px}
+  .controls{display:flex;gap:10px;justify-content:center;margin-top:12px}
+  .ctrl{background:#1f2440;color:var(--text);border:2px solid var(--line);border-radius:10px;padding:10px 22px;
+    font-family:'Russo One';font-size:16px;cursor:pointer}
+  .ctrl:hover{border-color:var(--accent);color:var(--accent)}
+  .ctrl:active{transform:scale(.97)}
+  canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:30}
+  @media (max-width:560px){ .stat b{font-size:20px} .car{width:64px;height:32px} .lane{height:48px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>TYPING RACER</h1>
+  <div class="sub">Type fast. Beat the bots. Don't crash.</div>
+
+  <div class="stats">
+    <div class="stat"><b id="sWpm">0</b><span>WPM</span></div>
+    <div class="stat"><b id="sAcc">100%</b><span>ACCURACY</span></div>
+    <div class="stat"><b id="sTime">0.0</b><span>SECONDS</span></div>
+    <div class="stat"><b id="sProg">0%</b><span>PROGRESS</span></div>
+  </div>
+
+  <div class="track" id="track">
+    <div class="finish"></div>
+  </div>
+
+  <div class="textbox" id="textbox">
+    <div class="streak" id="streak">🔥 NITRO x0</div>
+    <div id="text"></div>
+    <input id="hidden" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div class="controls">
+    <button class="ctrl" id="restartBtn" title="Restart (Esc)">↻ Restart</button>
+    <button class="ctrl" id="menuBtn">☰ Menu</button>
+  </div>
+  <div class="hint">Press <b>Esc</b> to restart anytime. Click the text box and start typing when the light turns green. 20 correct letters in a row = NITRO 🔥</div>
+</div>
+
+<!-- Menu -->
+<div class="overlay" id="menu">
+  <div class="card">
+    <h2>🏁 Pick your race</h2>
+    <p>How fast are the bots?</p>
+    <div class="diffs" id="diffs">
+      <button class="diff" data-wpm="25">🐢 Easy<small>~25 WPM</small></button>
+      <button class="diff sel" data-wpm="45">🚗 Medium<small>~45 WPM</small></button>
+      <button class="diff" data-wpm="70">🏎️ Hard<small>~70 WPM</small></button>
+      <button class="diff" data-wpm="100">🚀 Insane<small>~100 WPM</small></button>
+    </div>
+    <button class="btn" id="startBtn">RACE!</button>
+    <div class="best" id="bestLine"></div>
+  </div>
+</div>
+
+<!-- Countdown -->
+<div class="overlay hidden" id="countdown">
+  <div class="lights" id="lights"><div class="light"></div><div class="light"></div><div class="light"></div></div>
+</div>
+
+<!-- Results -->
+<div class="overlay hidden" id="results">
+  <div class="card">
+    <div class="bigplace" id="rPlace">🥇</div>
+    <h2 id="rTitle">You won!</h2>
+    <div class="newbest" id="rBest"></div>
+    <div class="results">
+      <div><b id="rWpm">0</b><span>WPM</span></div>
+      <div><b id="rAcc">0%</b><span>ACCURACY</span></div>
+      <div><b id="rTime">0s</b><span>TIME</span></div>
+    </div>
+    <button class="btn" id="againBtn">RACE AGAIN</button>
+  </div>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<script>
+const PASSAGES = [
+  "The quick brown fox jumps over the lazy dog while the cat watches from the window.",
+  "Every great inventor started with a simple idea and the courage to try it.",
+  "My printer hummed all night and by morning a tiny castle sat on the build plate.",
+  "Racing cars need fast engines, sticky tires, and a driver who never gives up.",
+  "The robot blinked twice, rolled across the floor, and politely asked for more batteries.",
+  "Practice every day and your fingers will learn to fly across the keyboard.",
+  "A small business grows one happy customer at a time, so treat each one well.",
+  "The hamster ran on its wheel so fast that it almost reached the speed of light.",
+  "Desert winds carried sand across the road as the sun slowly melted into the dunes.",
+  "Code is like a puzzle where every missing semicolon hides a tiny surprise.",
+  "Thunder cracked above the city and the street lights flickered like nervous fireflies.",
+  "Pizza for breakfast is a bold choice, but some heroes are not afraid of anything.",
+  "The scoreboard flashed red as the final buzzer echoed through the crowded stadium.",
+  "Under the ocean, glowing fish drifted past a sunken ship full of old secrets.",
+  "If you can type this sentence without a single mistake, you are a true champion.",
+  "Astronauts float in space, eat food from pouches, and see sixteen sunsets every day.",
+  "The water scooter zoomed across the waves, leaving a trail of white foam behind it.",
+  "Never trust a penguin who says he knows a shortcut through the jungle.",
+  "Small steps every morning can turn into giant leaps by the end of the year.",
+  "The wizard sneezed and accidentally turned his whole library into flying pancakes."
+];
+const BOTS = [
+  {name:"BLITZ", color:"#3b8bff", mult:1.12},
+  {name:"TURBO", color:"#3ee08f", mult:0.95},
+  {name:"ZIPPY", color:"#c25bff", mult:0.82},
+];
+
+const $ = id => document.getElementById(id);
+const track=$('track'), textEl=$('text'), hidden=$('hidden'), textbox=$('textbox');
+let botWpm=45, text="", pos=0, errors=0, correct=0, streak=0, startTime=0, running=false, timer=null;
+let racers=[], finishOrder=[], wrongNow=false, lastPassage=-1;
+
+// ---- storage (optional) ----
+function getBest(){ try{ return JSON.parse(localStorage.getItem('typingRacerBest')||'{}'); }catch(e){ return {}; } }
+function setBest(b){ try{ localStorage.setItem('typingRacerBest', JSON.stringify(b)); }catch(e){} }
+function showBest(){
+  const b=getBest().wpm;
+  $('bestLine').innerHTML = b ? `Your best: <b>${b} WPM</b>` : `No best score yet — set one!`;
+}
+
+// ---- sound ----
+let actx=null;
+function beep(freq,dur=0.12,type='square',vol=0.08){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type=type; o.frequency.value=freq; g.gain.value=vol;
+    o.connect(g); g.connect(actx.destination);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+    o.start(); o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+
+// ---- cars ----
+function carSVG(color){
+  return `<svg viewBox="0 0 84 42" width="100%" height="100%">
+    <rect x="6" y="10" width="72" height="22" rx="8" fill="${color}"/>
+    <path d="M24 10 L32 2 H56 L64 10 Z" fill="${color}"/>
+    <path d="M34 4 H54 L60 10 H30 Z" fill="#bfe6ff" opacity=".85"/>
+    <rect x="70" y="14" width="8" height="5" rx="2" fill="#fff59d"/>
+    <rect x="6" y="14" width="5" height="5" rx="2" fill="#ff8080"/>
+    <rect x="14" y="18" width="56" height="3" fill="#ffffff55"/>
+    <circle cx="22" cy="33" r="7" fill="#111"/><circle cx="22" cy="33" r="3" fill="#888"/>
+    <circle cx="62" cy="33" r="7" fill="#111"/><circle cx="62" cy="33" r="3" fill="#888"/>
+  </svg>`;
+}
+function buildTrack(){
+  track.querySelectorAll('.lane').forEach(l=>l.remove());
+  racers=[{name:"YOU", color:"#ff3b3b", you:true, progress:0, done:false}];
+  BOTS.forEach(b=>racers.push({...b, you:false, progress:0, done:false,
+    speed: botWpm*b.mult*(0.93+Math.random()*0.14)}));
+  racers.forEach(r=>{
+    const lane=document.createElement('div'); lane.className='lane';
+    lane.innerHTML=`<div class="car ${r.you?'you':''}"><div class="flame"></div><span class="name">${r.name}</span>${carSVG(r.color)}</div><div class="place"></div>`;
+    track.appendChild(lane);
+    r.el=lane.querySelector('.car'); r.placeEl=lane.querySelector('.place');
+  });
+  drawCars();
+}
+function drawCars(){
+  const w=track.clientWidth - 26 - (racers[0].el.offsetWidth||84);
+  racers.forEach(r=>{ r.el.style.left = (Math.min(r.progress,1)*w)+'px'; });
+}
+
+// ---- text ----
+function pickPassage(){
+  let i; do{ i=Math.floor(Math.random()*PASSAGES.length); }while(i===lastPassage && PASSAGES.length>1);
+  lastPassage=i; return PASSAGES[i];
+}
+function renderText(){
+  let html="";
+  for(let i=0;i<text.length;i++){
+    let c=text[i]===' '?'&nbsp;':text[i].replace('<','&lt;');
+    let cls='ch'+(i<pos?' done':'')+(i===pos?' cur'+(wrongNow?' wrong':''):'');
+    // allow wrapping on spaces
+    html+=`<span class="${cls}">${c}</span>`+(text[i]===' '?'<wbr>':'');
+  }
+  textEl.innerHTML=html;
+}
+
+// ---- game flow ----
+let raceId=0;
+function stopRace(){
+  raceId++; running=false; clearInterval(timer); track.classList.remove('moving');
+  $('countdown').classList.add('hidden');
+}
+function newRace(){
+  stopRace();
+  text=pickPassage(); pos=0; errors=0; correct=0; streak=0; wrongNow=false; finishOrder=[];
+  buildTrack(); renderText(); updateStats(0);
+  $('streak').classList.remove('show');
+  $('menu').classList.add('hidden'); $('results').classList.add('hidden');
+  countdown();
+}
+function countdown(){
+  const cd=$('countdown'), lights=[...document.querySelectorAll('.light')];
+  $('lights').classList.remove('go'); lights.forEach(l=>l.classList.remove('on'));
+  cd.classList.remove('hidden');
+  hidden.value=''; hidden.focus();
+  let n=0; const id=raceId;
+  const step=()=>{
+    if(id!==raceId) return; // race was restarted
+    if(n<3){ lights[n].classList.add('on'); beep(440,.18); n++; setTimeout(step,700); }
+    else { $('lights').classList.add('go'); beep(880,.35); setTimeout(()=>{ if(id!==raceId) return; cd.classList.add('hidden'); go(); },350); }
+  };
+  setTimeout(step,300);
+}
+function go(){
+  running=true; startTime=performance.now();
+  track.classList.add('moving');
+  hidden.focus(); textbox.classList.add('focus');
+  let last=performance.now();
+  timer=setInterval(()=>{
+    const now=performance.now(), dt=(now-last)/1000; last=now;
+    const elapsed=(now-startTime)/1000;
+    racers.forEach(r=>{
+      if(r.you||r.done) return;
+      const wobble=0.75+Math.random()*0.5; // bots speed up / slow down a bit
+      const cps=r.speed*5/60*wobble;
+      r.progress+=cps*dt/text.length;
+      if(r.progress>=1){ r.progress=1; finish(r); }
+    });
+    drawCars(); updateStats(elapsed);
+  },50);
+}
+function finish(r){
+  if(r.done) return;
+  r.done=true; finishOrder.push(r);
+  const medals=['🥇','🥈','🥉','4th'];
+  r.placeEl.textContent=medals[finishOrder.length-1];
+  if(r.you) endRace();
+}
+function endRace(){
+  running=false; clearInterval(timer); track.classList.remove('moving');
+  racers.forEach(r=>r.el.classList.remove('nitro'));
+  const elapsed=(performance.now()-startTime)/1000;
+  const wpm=Math.round((text.length/5)/(elapsed/60));
+  const acc=Math.round(correct/Math.max(1,correct+errors)*100);
+  const place=finishOrder.findIndex(r=>r.you)+1;
+  const titles=['You won! 🏆','2nd place — so close!','3rd place — on the podium!','Last place... rematch?'];
+  $('rPlace').textContent=['🥇','🥈','🥉','🐌'][place-1];
+  $('rTitle').textContent=titles[place-1];
+  $('rWpm').textContent=wpm; $('rAcc').textContent=acc+'%'; $('rTime').textContent=elapsed.toFixed(1)+'s';
+  const best=getBest();
+  if(!best.wpm || wpm>best.wpm){ setBest({wpm}); $('rBest').textContent= best.wpm ? `⭐ New best! (old: ${best.wpm} WPM)` : '⭐ First best score saved!'; }
+  else $('rBest').textContent='';
+  setTimeout(()=>{ $('results').classList.remove('hidden'); if(place===1){ confetti(); [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,.2,'triangle'),i*120)); } },500);
+}
+function updateStats(elapsed){
+  const wpm = elapsed>0.5 ? Math.round((pos/5)/(elapsed/60)) : 0;
+  $('sWpm').textContent=wpm;
+  $('sAcc').textContent=Math.round(correct/Math.max(1,correct+errors)*100)+'%';
+  $('sTime').textContent=elapsed.toFixed(1);
+  $('sProg').textContent=Math.round(pos/Math.max(1,text.length)*100)+'%';
+}
+
+// ---- typing ----
+function typeChar(ch){
+  if(!running) return;
+  const you=racers[0];
+  if(ch===text[pos]){
+    pos++; correct++; streak++; wrongNow=false; textbox.classList.remove('err');
+    you.progress=pos/text.length;
+    if(streak>=20){ you.el.classList.add('nitro'); $('streak').textContent='🔥 NITRO x'+streak; $('streak').classList.add('show'); }
+    if(pos>=text.length){ renderText(); drawCars(); finish(you); return; }
+  } else {
+    errors++; streak=0; wrongNow=true;
+    you.el.classList.remove('nitro'); $('streak').classList.remove('show');
+    you.el.classList.remove('shake'); void you.el.offsetWidth; you.el.classList.add('shake');
+    textbox.classList.add('err'); beep(120,.1,'sawtooth',.06);
+  }
+  renderText(); drawCars();
+}
+hidden.addEventListener('input',()=>{
+  const v=hidden.value; hidden.value='';
+  for(const ch of v) typeChar(ch);
+});
+hidden.addEventListener('keydown',e=>{ if(e.key==='Enter') e.preventDefault(); });
+textbox.addEventListener('click',()=>{ hidden.focus(); });
+hidden.addEventListener('focus',()=>textbox.classList.add('focus'));
+hidden.addEventListener('blur',()=>textbox.classList.remove('focus'));
+document.addEventListener('keydown',e=>{ if(running && document.activeElement!==hidden){ hidden.focus(); } });
+
+// ---- menu ----
+document.querySelectorAll('.diff').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.diff').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel'); botWpm=+b.dataset.wpm;
+}));
+$('startBtn').addEventListener('click',newRace);
+$('restartBtn').addEventListener('click',e=>{ e.currentTarget.blur(); newRace(); });
+$('menuBtn').addEventListener('click',e=>{ e.currentTarget.blur(); stopRace(); $('results').classList.add('hidden'); showBest(); $('menu').classList.remove('hidden'); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && $('menu').classList.contains('hidden')){ e.preventDefault(); newRace(); } });
+$('againBtn').addEventListener('click',()=>{ $('results').classList.add('hidden'); showBest(); $('menu').classList.remove('hidden'); });
+window.addEventListener('resize',()=>{ if(racers.length) drawCars(); });
+
+// ---- confetti ----
+function confetti(){
+  const c=$('confetti'), x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight;
+  const cols=['#ffcc29','#ff3b3b','#3ee08f','#3b8bff','#c25bff'];
+  const p=[...Array(160)].map(()=>({x:Math.random()*c.width,y:-20-Math.random()*c.height*.5,
+    vx:(Math.random()-.5)*4,vy:2+Math.random()*4,r:4+Math.random()*5,a:Math.random()*6,col:cols[Math.random()*5|0]}));
+  let t=0;
+  (function f(){
+    x.clearRect(0,0,c.width,c.height);
+    p.forEach(q=>{ q.x+=q.vx; q.y+=q.vy; q.a+=.1; x.save(); x.translate(q.x,q.y); x.rotate(q.a);
+      x.fillStyle=q.col; x.fillRect(-q.r/2,-q.r/2,q.r,q.r*.6); x.restore(); });
+    if(++t<220) requestAnimationFrame(f); else x.clearRect(0,0,c.width,c.height);
+  })();
+}
+
+// init preview
+text=PASSAGES[0]; buildTrack(); renderText(); showBest();
+</script>
+</body>
+</html>
